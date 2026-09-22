@@ -1,0 +1,58 @@
+
+    .page-frame > img, .page-frame > video { display: block; height: 100%; object-fit: contain; pointer-events: none; width: 100%; }
+    .page-frame.is-fading > img:not([hidden]), .page-frame.is-fading > video:not([hidden]) { animation: fade-out .22s ease-out both; }
+    .empty { color: #a9a9b2; font-size: clamp(.9rem, 2vw, 1.1rem); padding: 2rem; text-align: center; }
+    .turning-page { display: none; inset: 0; pointer-events: none; position: absolute; transform-style: preserve-3d; z-index: 3; }
+    .turning-page.active { animation: fade-out .22s ease-out both; display: block; }
+    .turning-page img, .turning-page video { background: #17171b; display: block; height: 100%; object-fit: contain; width: 100%; }
+    @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+    @media (max-width: 520px) { .settings-button { left: 14px; top: 14px; } .hint { display: none; } }
+    @media (prefers-reduced-motion: reduce) { .turning-page.active { animation-duration: .01ms; } }
+    @media (prefers-reduced-motion: reduce) { .page-frame.is-fading > img:not([hidden]), .page-frame.is-fading > video:not([hidden]) { animation-duration: .01ms; } }
+  </style>
+      <video id="pageVideo" playsinline loop muted hidden></video>
+      <div class="turning-page" id="turningPage" aria-hidden="true"></div>
+    </div>
+    const video = document.querySelector('#pageVideo');
+    const turningPage = document.querySelector('#turningPage');
+    const empty = document.querySelector('#emptyState');
+    }
+    function addFadeSheet(page) {
+      const sheet = document.createElement(page.type === 'video' ? 'video' : 'img');
+      const turnToken = Symbol('turn');
+      sheet.src = page.url;
+      if (page.type === 'video') { sheet.muted = true; sheet.playsInline = true; }
+      else sheet.alt = '';
+      turningPage.replaceChildren(sheet);
+      turningPage.turnToken = turnToken;
+      turningPage.className = 'turning-page active';
+      const clearTurn = () => {
+        if (turningPage.turnToken !== turnToken) return;
+        turningPage.className = 'turning-page';
+        turningPage.replaceChildren();
+        isTurning = false;
+      };
+      turningPage.addEventListener('animationend', clearTurn, { once: true });
+      window.setTimeout(clearTurn, 700);
+    }
+    function changePage(direction) {
+      if (isTurning || target < 0 || target >= pages.length) return;
+      const leavingPage = pages[currentPage];
+      const displayedMedia = pages[currentPage].type === 'image' ? image : video;
+      const fadeToken = Symbol('fade');
+      isTurning = true;
+      frame.fadeToken = fadeToken;
+      const finishFade = () => {
+        if (frame.fadeToken !== fadeToken) return;
+        frame.classList.remove('is-fading');
+      currentPage = target;
+      updateReader();
+      addFadeSheet(leavingPage);
+        currentPage = target;
+        updateReader();
+        isTurning = false;
+      };
+      displayedMedia.addEventListener('animationend', finishFade, { once: true });
+      frame.classList.add('is-fading');
+      window.setTimeout(finishFade, 500);
+    }
