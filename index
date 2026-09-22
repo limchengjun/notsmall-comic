@@ -1,58 +1,1660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-    .page-frame > img, .page-frame > video { display: block; height: 100%; object-fit: contain; pointer-events: none; width: 100%; }
-    .page-frame.is-fading > img:not([hidden]), .page-frame.is-fading > video:not([hidden]) { animation: fade-out .22s ease-out both; }
-    .empty { color: #a9a9b2; font-size: clamp(.9rem, 2vw, 1.1rem); padding: 2rem; text-align: center; }
-    .turning-page { display: none; inset: 0; pointer-events: none; position: absolute; transform-style: preserve-3d; z-index: 3; }
-    .turning-page.active { animation: fade-out .22s ease-out both; display: block; }
-    .turning-page img, .turning-page video { background: #17171b; display: block; height: 100%; object-fit: contain; width: 100%; }
-    @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
-    @media (max-width: 520px) { .settings-button { left: 14px; top: 14px; } .hint { display: none; } }
-    @media (prefers-reduced-motion: reduce) { .turning-page.active { animation-duration: .01ms; } }
-    @media (prefers-reduced-motion: reduce) { .page-frame.is-fading > img:not([hidden]), .page-frame.is-fading > video:not([hidden]) { animation-duration: .01ms; } }
-  </style>
-      <video id="pageVideo" playsinline loop muted hidden></video>
-      <div class="turning-page" id="turningPage" aria-hidden="true"></div>
+<title>Portrait Page Viewer</title>
+
+<style>
+/* =========================================================
+   BASIC RESET
+========================================================= */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    font-family: Arial, Helvetica, sans-serif;
+    color: white;
+}
+
+/* =========================================================
+   MAIN VIEWER
+========================================================= */
+
+#viewer {
+    width: 100vw;
+    height: 100vh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    position: relative;
+
+    background: #111;
+
+    overflow: hidden;
+}
+
+/*
+    This is the 1988 × 2690 page.
+
+    The aspect ratio is:
+
+    1988 / 2690 = 0.7389
+*/
+
+#page {
+    width: min(100vw, calc(100vh * 1988 / 2690));
+    height: min(100vh, calc(100vw * 2690 / 1988));
+
+    aspect-ratio: 1988 / 2690;
+
+    position: relative;
+
+    overflow: hidden;
+
+    background: #222;
+
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* =========================================================
+   MEDIA
+========================================================= */
+
+#page img,
+#page video {
+
+    width: 100%;
+    height: 100%;
+
+    display: block;
+
+    object-fit: contain;
+
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+#emptyState {
+
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+
+    color: #aaa;
+
+    padding: 40px;
+}
+
+#emptyState h2 {
+    color: white;
+    margin-bottom: 10px;
+}
+
+#emptyState p {
+    line-height: 1.5;
+}
+
+/* =========================================================
+   PAGE COUNTER
+========================================================= */
+
+#pageCounter {
+
+    position: fixed;
+
+    bottom: 20px;
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    background: rgba(0,0,0,0.65);
+
+    padding: 8px 14px;
+
+    border-radius: 20px;
+
+    font-size: 13px;
+
+    z-index: 20;
+
+    pointer-events: none;
+}
+
+/* =========================================================
+   SETTINGS BUTTON
+========================================================= */
+
+#settingsButton {
+
+    position: fixed;
+
+    top: 20px;
+    right: 20px;
+
+    width: 46px;
+    height: 46px;
+
+    border: none;
+
+    border-radius: 50%;
+
+    background: rgba(0,0,0,0.65);
+
+    color: white;
+
+    font-size: 22px;
+
+    cursor: pointer;
+
+    z-index: 100;
+
+    transition: 0.2s;
+}
+
+#settingsButton:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+/* =========================================================
+   SETTINGS PANEL
+========================================================= */
+
+#settingsPanel {
+
+    position: fixed;
+
+    top: 0;
+    right: 0;
+
+    width: 340px;
+    max-width: 90vw;
+
+    height: 100vh;
+
+    background: #181818;
+
+    z-index: 90;
+
+    transform: translateX(100%);
+
+    transition: transform 0.3s ease;
+
+    display: flex;
+    flex-direction: column;
+
+    box-shadow: -10px 0 40px rgba(0,0,0,0.4);
+}
+
+#settingsPanel.open {
+    transform: translateX(0);
+}
+
+.panelHeader {
+
+    height: 70px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 0 20px;
+
+    border-bottom: 1px solid #333;
+}
+
+.panelHeader h2 {
+    font-size: 18px;
+}
+
+.closeButton {
+
+    border: none;
+
+    background: none;
+
+    color: white;
+
+    font-size: 25px;
+
+    cursor: pointer;
+}
+
+.panelContent {
+
+    padding: 20px;
+
+    overflow-y: auto;
+}
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+.actionButton {
+
+    width: 100%;
+
+    border: none;
+
+    padding: 14px 16px;
+
+    margin-bottom: 10px;
+
+    border-radius: 8px;
+
+    background: #2b2b2b;
+
+    color: white;
+
+    font-size: 14px;
+
+    cursor: pointer;
+
+    text-align: left;
+}
+
+.actionButton:hover {
+    background: #3b3b3b;
+}
+
+.actionButton.primary {
+    background: white;
+    color: black;
+}
+
+.actionButton.danger {
+    background: #642727;
+}
+
+.actionButton.danger:hover {
+    background: #803030;
+}
+
+/* =========================================================
+   HIDDEN FILE INPUT
+========================================================= */
+
+#fileInput {
+    display: none;
+}
+
+/* =========================================================
+   PAGES MANAGER
+========================================================= */
+
+#pagesManager {
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 200;
+
+    background: #111;
+
+    display: none;
+
+    flex-direction: column;
+}
+
+#pagesManager.open {
+    display: flex;
+}
+
+.pagesHeader {
+
+    height: 70px;
+
+    flex-shrink: 0;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    padding: 0 25px;
+
+    border-bottom: 1px solid #333;
+}
+
+.pagesHeader h2 {
+    font-size: 20px;
+}
+
+.pagesHeader button {
+
+    border: none;
+
+    background: #292929;
+
+    color: white;
+
+    padding: 10px 15px;
+
+    border-radius: 7px;
+
+    cursor: pointer;
+}
+
+#pagesGrid {
+
+    flex: 1;
+
+    overflow-y: auto;
+
+    padding: 25px;
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(auto-fill, minmax(170px, 1fr));
+
+    gap: 20px;
+
+    align-content: start;
+}
+
+/* =========================================================
+   PAGE CARD
+========================================================= */
+
+.pageCard {
+
+    position: relative;
+
+    background: #202020;
+
+    border-radius: 8px;
+
+    overflow: hidden;
+
+    cursor: grab;
+
+    border: 2px solid transparent;
+
+    transition: 0.15s;
+}
+
+.pageCard:hover {
+    border-color: #666;
+}
+
+.pageCard.dragging {
+    opacity: 0.35;
+}
+
+.pageThumbnail {
+
+    width: 100%;
+
+    aspect-ratio: 1988 / 2690;
+
+    background: #333;
+
+    overflow: hidden;
+}
+
+.pageThumbnail img,
+.pageThumbnail video {
+
+    width: 100%;
+    height: 100%;
+
+    object-fit: cover;
+
+    display: block;
+}
+
+.pageInfo {
+
+    padding: 10px;
+
+    font-size: 12px;
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+}
+
+.pageNumber {
+    color: #aaa;
+}
+
+.deletePage {
+
+    border: none;
+
+    background: #612727;
+
+    color: white;
+
+    width: 25px;
+    height: 25px;
+
+    border-radius: 50%;
+
+    cursor: pointer;
+}
+
+/* =========================================================
+   DROP INDICATOR
+========================================================= */
+
+.pageCard.drag-over {
+    border-color: white;
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 600px) {
+
+    #settingsButton {
+
+        top: 12px;
+        right: 12px;
+
+        width: 40px;
+        height: 40px;
+
+        font-size: 18px;
+    }
+
+    #pageCounter {
+        bottom: 10px;
+    }
+
+    #pagesGrid {
+
+        grid-template-columns:
+            repeat(2, 1fr);
+
+        gap: 12px;
+
+        padding: 15px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- =====================================================
+     MAIN VIEWER
+===================================================== -->
+
+<div id="viewer">
+
+    <div id="page">
+
+        <div id="emptyState">
+
+            <h2>No pages yet</h2>
+
+            <p>
+                Open the settings menu<br>
+                and upload your images or videos.
+            </p>
+
+        </div>
+
     </div>
-    const video = document.querySelector('#pageVideo');
-    const turningPage = document.querySelector('#turningPage');
-    const empty = document.querySelector('#emptyState');
+
+</div>
+
+
+<!-- =====================================================
+     PAGE COUNTER
+===================================================== -->
+
+<div id="pageCounter">
+    0 / 0
+</div>
+
+
+<!-- =====================================================
+     SETTINGS BUTTON
+===================================================== -->
+
+<button id="settingsButton" aria-label="Settings">
+    ⚙
+</button>
+
+
+<!-- =====================================================
+     SETTINGS PANEL
+===================================================== -->
+
+<div id="settingsPanel">
+
+    <div class="panelHeader">
+
+        <h2>Settings</h2>
+
+        <button
+            class="closeButton"
+            id="closeSettings">
+            ×
+        </button>
+
+    </div>
+
+
+    <div class="panelContent">
+
+        <!-- Upload -->
+
+        <button
+            class="actionButton primary"
+            id="uploadButton">
+
+            ＋ Upload Images / Videos
+
+        </button>
+
+        <input
+            type="file"
+            id="fileInput"
+            multiple
+            accept="image/*,video/*">
+
+
+        <!-- Pages -->
+
+        <button
+            class="actionButton"
+            id="openPages">
+
+            ☷ Manage Pages
+
+        </button>
+
+
+        <!-- Fullscreen -->
+
+        <button
+            class="actionButton"
+            id="fullscreenButton">
+
+            ⛶ Fullscreen
+
+        </button>
+
+
+        <!-- Delete current -->
+
+        <button
+            class="actionButton danger"
+            id="deleteCurrent">
+
+            🗑 Delete Current Page
+
+        </button>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     PAGES MANAGER
+===================================================== -->
+
+<div id="pagesManager">
+
+    <div class="pagesHeader">
+
+        <h2>Pages</h2>
+
+        <button id="closePages">
+            Done
+        </button>
+
+    </div>
+
+
+    <div id="pagesGrid"></div>
+
+</div>
+
+
+<script>
+
+/* =========================================================
+   CONFIGURATION
+========================================================= */
+
+const PAGE_WIDTH = 1988;
+const PAGE_HEIGHT = 2690;
+
+
+/* =========================================================
+   DATA
+========================================================= */
+
+/*
+    Each page looks like:
+
+    {
+        id: unique ID,
+        name: filename,
+        type: "image" or "video",
+        url: blob URL
     }
-    function addFadeSheet(page) {
-      const sheet = document.createElement(page.type === 'video' ? 'video' : 'img');
-      const turnToken = Symbol('turn');
-      sheet.src = page.url;
-      if (page.type === 'video') { sheet.muted = true; sheet.playsInline = true; }
-      else sheet.alt = '';
-      turningPage.replaceChildren(sheet);
-      turningPage.turnToken = turnToken;
-      turningPage.className = 'turning-page active';
-      const clearTurn = () => {
-        if (turningPage.turnToken !== turnToken) return;
-        turningPage.className = 'turning-page';
-        turningPage.replaceChildren();
-        isTurning = false;
-      };
-      turningPage.addEventListener('animationend', clearTurn, { once: true });
-      window.setTimeout(clearTurn, 700);
+*/
+
+let pages = [];
+
+let currentPage = 0;
+
+
+/* =========================================================
+   DOM ELEMENTS
+========================================================= */
+
+const pageElement =
+    document.getElementById("page");
+
+const pageCounter =
+    document.getElementById("pageCounter");
+
+const emptyState =
+    document.getElementById("emptyState");
+
+const settingsButton =
+    document.getElementById("settingsButton");
+
+const settingsPanel =
+    document.getElementById("settingsPanel");
+
+const closeSettings =
+    document.getElementById("closeSettings");
+
+const uploadButton =
+    document.getElementById("uploadButton");
+
+const fileInput =
+    document.getElementById("fileInput");
+
+const openPages =
+    document.getElementById("openPages");
+
+const pagesManager =
+    document.getElementById("pagesManager");
+
+const closePages =
+    document.getElementById("closePages");
+
+const pagesGrid =
+    document.getElementById("pagesGrid");
+
+const deleteCurrent =
+    document.getElementById("deleteCurrent");
+
+const fullscreenButton =
+    document.getElementById("fullscreenButton");
+
+
+/* =========================================================
+   SETTINGS PANEL
+========================================================= */
+
+settingsButton.addEventListener(
+    "click",
+    () => {
+
+        settingsPanel.classList.toggle("open");
+
     }
-    function changePage(direction) {
-      if (isTurning || target < 0 || target >= pages.length) return;
-      const leavingPage = pages[currentPage];
-      const displayedMedia = pages[currentPage].type === 'image' ? image : video;
-      const fadeToken = Symbol('fade');
-      isTurning = true;
-      frame.fadeToken = fadeToken;
-      const finishFade = () => {
-        if (frame.fadeToken !== fadeToken) return;
-        frame.classList.remove('is-fading');
-      currentPage = target;
-      updateReader();
-      addFadeSheet(leavingPage);
-        currentPage = target;
-        updateReader();
-        isTurning = false;
-      };
-      displayedMedia.addEventListener('animationend', finishFade, { once: true });
-      frame.classList.add('is-fading');
-      window.setTimeout(finishFade, 500);
+);
+
+
+closeSettings.addEventListener(
+    "click",
+    () => {
+
+        settingsPanel.classList.remove("open");
+
     }
+);
+
+
+/* =========================================================
+   UPLOAD
+========================================================= */
+
+uploadButton.addEventListener(
+    "click",
+    () => {
+
+        fileInput.click();
+
+    }
+);
+
+
+fileInput.addEventListener(
+    "change",
+    event => {
+
+        const files = Array.from(
+            event.target.files
+        );
+
+        if (!files.length) {
+            return;
+        }
+
+        files.forEach(file => {
+
+            const isImage =
+                file.type.startsWith("image/");
+
+            const isVideo =
+                file.type.startsWith("video/");
+
+            if (!isImage && !isVideo) {
+                return;
+            }
+
+            const objectURL =
+                URL.createObjectURL(file);
+
+            pages.push({
+
+                id:
+                    Date.now() +
+                    Math.random()
+                    .toString(36)
+                    .substring(2),
+
+                name: file.name,
+
+                type:
+                    isImage
+                        ? "image"
+                        : "video",
+
+                url: objectURL,
+
+                /*
+                    Keep the original File object
+                    available while this session is open.
+                */
+
+                file: file
+
+            });
+
+        });
+
+
+        /*
+            Start at first uploaded page
+            if this was previously empty.
+        */
+
+        if (pages.length > 0) {
+
+            if (currentPage >= pages.length) {
+                currentPage = pages.length - 1;
+            }
+
+        }
+
+
+        renderPage();
+
+        renderPagesManager();
+
+        fileInput.value = "";
+
+    }
+);
+
+
+/* =========================================================
+   RENDER CURRENT PAGE
+========================================================= */
+
+function renderPage() {
+
+    pageElement.innerHTML = "";
+
+    if (pages.length === 0) {
+
+        pageElement.appendChild(
+            emptyState
+        );
+
+        pageCounter.textContent = "0 / 0";
+
+        return;
+    }
+
+
+    /*
+        Prevent invalid index.
+    */
+
+    if (currentPage < 0) {
+        currentPage = 0;
+    }
+
+    if (currentPage >= pages.length) {
+        currentPage = pages.length - 1;
+    }
+
+
+    const item =
+        pages[currentPage];
+
+
+    if (item.type === "image") {
+
+        const image =
+            document.createElement("img");
+
+        image.src = item.url;
+
+        image.alt = item.name;
+
+        /*
+            Prevent dragging the image
+            itself.
+        */
+
+        image.draggable = false;
+
+        pageElement.appendChild(image);
+
+    }
+
+
+    else if (item.type === "video") {
+
+        const video =
+            document.createElement("video");
+
+        video.src = item.url;
+
+        video.controls = true;
+
+        video.autoplay = true;
+
+        video.loop = false;
+
+        video.playsInline = true;
+
+        pageElement.appendChild(video);
+
+    }
+
+
+    pageCounter.textContent =
+        `${currentPage + 1} / ${pages.length}`;
+
+}
+
+
+/* =========================================================
+   NEXT PAGE
+========================================================= */
+
+function nextPage() {
+
+    if (pages.length === 0) {
+        return;
+    }
+
+    if (currentPage < pages.length - 1) {
+
+        currentPage++;
+
+        renderPage();
+
+    }
+
+}
+
+
+/* =========================================================
+   PREVIOUS PAGE
+========================================================= */
+
+function previousPage() {
+
+    if (pages.length === 0) {
+        return;
+    }
+
+    if (currentPage > 0) {
+
+        currentPage--;
+
+        renderPage();
+
+    }
+
+}
+
+
+/* =========================================================
+   MOUSE CLICK NAVIGATION
+========================================================= */
+
+/*
+    LEFT CLICK = PREVIOUS
+
+    RIGHT CLICK = NEXT
+*/
+
+pageElement.addEventListener(
+    "click",
+    event => {
+
+        /*
+            If user clicks a video control,
+            don't change page.
+        */
+
+        if (
+            event.target.tagName === "VIDEO" ||
+            event.target.closest("video")
+        ) {
+
+            return;
+
+        }
+
+        previousPage();
+
+    }
+);
+
+
+/* =========================================================
+   RIGHT CLICK
+========================================================= */
+
+pageElement.addEventListener(
+    "contextmenu",
+    event => {
+
+        /*
+            Disable browser context menu.
+        */
+
+        event.preventDefault();
+
+        nextPage();
+
+    }
+);
+
+
+/*
+    Also prevent the context menu
+    anywhere in the viewer.
+*/
+
+document.getElementById("viewer")
+    .addEventListener(
+        "contextmenu",
+        event => {
+
+            event.preventDefault();
+
+        }
+    );
+
+
+/* =========================================================
+   TOUCH / SWIPE
+========================================================= */
+
+let touchStartX = 0;
+let touchStartY = 0;
+
+
+pageElement.addEventListener(
+    "touchstart",
+    event => {
+
+        const touch =
+            event.touches[0];
+
+        touchStartX =
+            touch.clientX;
+
+        touchStartY =
+            touch.clientY;
+
+    },
+    {
+        passive: true
+    }
+);
+
+
+pageElement.addEventListener(
+    "touchend",
+    event => {
+
+        const touch =
+            event.changedTouches[0];
+
+        const endX =
+            touch.clientX;
+
+        const endY =
+            touch.clientY;
+
+        const differenceX =
+            endX - touchStartX;
+
+        const differenceY =
+            endY - touchStartY;
+
+
+        /*
+            Only treat it as a swipe if
+            horizontal movement is dominant.
+        */
+
+        if (
+            Math.abs(differenceX) >
+            Math.abs(differenceY)
+        ) {
+
+            if (
+                Math.abs(differenceX) > 50
+            ) {
+
+                if (differenceX > 0) {
+
+                    /*
+                        Swipe right
+                        = previous
+                    */
+
+                    previousPage();
+
+                }
+
+                else {
+
+                    /*
+                        Swipe left
+                        = next
+                    */
+
+                    nextPage();
+
+                }
+
+            }
+
+        }
+
+    },
+    {
+        passive: true
+    }
+);
+
+
+/* =========================================================
+   KEYBOARD CONTROLS
+========================================================= */
+
+document.addEventListener(
+    "keydown",
+    event => {
+
+        if (event.key === "ArrowRight") {
+
+            nextPage();
+
+        }
+
+        if (event.key === "ArrowLeft") {
+
+            previousPage();
+
+        }
+
+        if (event.key === "Escape") {
+
+            settingsPanel.classList.remove(
+                "open"
+            );
+
+            pagesManager.classList.remove(
+                "open"
+            );
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   PAGES MANAGER
+========================================================= */
+
+openPages.addEventListener(
+    "click",
+    () => {
+
+        settingsPanel.classList.remove(
+            "open"
+        );
+
+        pagesManager.classList.add(
+            "open"
+        );
+
+        renderPagesManager();
+
+    }
+);
+
+
+closePages.addEventListener(
+    "click",
+    () => {
+
+        pagesManager.classList.remove(
+            "open"
+        );
+
+        renderPage();
+
+    }
+);
+
+
+/* =========================================================
+   RENDER PAGE GRID
+========================================================= */
+
+function renderPagesManager() {
+
+    pagesGrid.innerHTML = "";
+
+
+    pages.forEach(
+        (item, index) => {
+
+            const card =
+                document.createElement("div");
+
+            card.className =
+                "pageCard";
+
+            card.draggable = true;
+
+            card.dataset.index = index;
+
+
+            /*
+                Thumbnail
+            */
+
+            const thumbnail =
+                document.createElement("div");
+
+            thumbnail.className =
+                "pageThumbnail";
+
+
+            if (item.type === "image") {
+
+                const img =
+                    document.createElement("img");
+
+                img.src = item.url;
+
+                img.draggable = false;
+
+                thumbnail.appendChild(img);
+
+            }
+
+            else {
+
+                const video =
+                    document.createElement("video");
+
+                video.src = item.url;
+
+                video.muted = true;
+
+                video.preload = "metadata";
+
+                thumbnail.appendChild(video);
+
+            }
+
+
+            /*
+                Information
+            */
+
+            const info =
+                document.createElement("div");
+
+            info.className =
+                "pageInfo";
+
+
+            const number =
+                document.createElement("span");
+
+            number.className =
+                "pageNumber";
+
+            number.textContent =
+                `${index + 1}. ${item.name}`;
+
+
+            /*
+                Delete button
+            */
+
+            const deleteButton =
+                document.createElement("button");
+
+            deleteButton.className =
+                "deletePage";
+
+            deleteButton.textContent =
+                "×";
+
+
+            deleteButton.addEventListener(
+                "click",
+                event => {
+
+                    event.stopPropagation();
+
+                    deletePage(index);
+
+                }
+            );
+
+
+            info.appendChild(number);
+
+            info.appendChild(deleteButton);
+
+
+            card.appendChild(thumbnail);
+
+            card.appendChild(info);
+
+
+            /*
+                Clicking a thumbnail
+                jumps to that page.
+            */
+
+            card.addEventListener(
+                "click",
+                () => {
+
+                    currentPage = index;
+
+                    renderPage();
+
+                    pagesManager.classList.remove(
+                        "open"
+                    );
+
+                }
+            );
+
+
+            /*
+                Drag events
+            */
+
+            card.addEventListener(
+                "dragstart",
+                dragStart
+            );
+
+            card.addEventListener(
+                "dragover",
+                dragOver
+            );
+
+            card.addEventListener(
+                "dragleave",
+                dragLeave
+            );
+
+            card.addEventListener(
+                "drop",
+                dropPage
+            );
+
+            card.addEventListener(
+                "dragend",
+                dragEnd
+            );
+
+
+            pagesGrid.appendChild(card);
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   DRAG AND DROP
+========================================================= */
+
+let draggedIndex = null;
+
+
+function dragStart(event) {
+
+    draggedIndex =
+        Number(
+            event.currentTarget.dataset.index
+        );
+
+    event.currentTarget.classList.add(
+        "dragging"
+    );
+
+}
+
+
+function dragOver(event) {
+
+    event.preventDefault();
+
+    event.currentTarget.classList.add(
+        "drag-over"
+    );
+
+}
+
+
+function dragLeave(event) {
+
+    event.currentTarget.classList.remove(
+        "drag-over"
+    );
+
+}
+
+
+function dropPage(event) {
+
+    event.preventDefault();
+
+    const targetCard =
+        event.currentTarget;
+
+    const targetIndex =
+        Number(
+            targetCard.dataset.index
+        );
+
+
+    targetCard.classList.remove(
+        "drag-over"
+    );
+
+
+    if (
+        draggedIndex === null ||
+        draggedIndex === targetIndex
+    ) {
+
+        return;
+
+    }
+
+
+    /*
+        Move dragged page
+        to target position.
+    */
+
+    const movedPage =
+        pages.splice(
+            draggedIndex,
+            1
+        )[0];
+
+
+    pages.splice(
+        targetIndex,
+        0,
+        movedPage
+    );
+
+
+    /*
+        Keep current page
+        pointing at the same media.
+    */
+
+    if (currentPage === draggedIndex) {
+
+        currentPage = targetIndex;
+
+    }
+
+    else if (
+        draggedIndex < currentPage &&
+        targetIndex >= currentPage
+    ) {
+
+        currentPage--;
+
+    }
+
+    else if (
+        draggedIndex > currentPage &&
+        targetIndex <= currentPage
+    ) {
+
+        currentPage++;
+
+    }
+
+
+    renderPagesManager();
+
+    renderPage();
+
+}
+
+
+function dragEnd(event) {
+
+    event.currentTarget.classList.remove(
+        "dragging"
+    );
+
+    draggedIndex = null;
+
+}
+
+
+/* =========================================================
+   DELETE PAGE
+========================================================= */
+
+function deletePage(index) {
+
+    if (
+        !confirm(
+            "Delete this page?"
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    const removed =
+        pages[index];
+
+
+    /*
+        Release Blob URL.
+    */
+
+    if (
+        removed &&
+        removed.url
+    ) {
+
+        URL.revokeObjectURL(
+            removed.url
+        );
+
+    }
+
+
+    pages.splice(
+        index,
+        1
+    );
+
+
+    /*
+        Fix current page.
+    */
+
+    if (pages.length === 0) {
+
+        currentPage = 0;
+
+    }
+
+    else if (
+        currentPage >= pages.length
+    ) {
+
+        currentPage =
+            pages.length - 1;
+
+    }
+
+
+    renderPagesManager();
+
+    renderPage();
+
+}
+
+
+/* =========================================================
+   DELETE CURRENT PAGE
+========================================================= */
+
+deleteCurrent.addEventListener(
+    "click",
+    () => {
+
+        if (pages.length === 0) {
+            return;
+        }
+
+        deletePage(currentPage);
+
+    }
+);
+
+
+/* =========================================================
+   FULLSCREEN
+========================================================= */
+
+fullscreenButton.addEventListener(
+    "click",
+    async () => {
+
+        try {
+
+            if (!document.fullscreenElement) {
+
+                await document.documentElement
+                    .requestFullscreen();
+
+            }
+
+            else {
+
+                await document.exitFullscreen();
+
+            }
+
+        }
+
+        catch (error) {
+
+            console.error(
+                "Fullscreen error:",
+                error
+            );
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   INITIALIZE
+========================================================= */
+
+renderPage();
+
+</script>
+
+</body>
+</html>
